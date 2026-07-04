@@ -74,6 +74,7 @@ public class GameManager : MonoBehaviour
         DontDestroyOnLoad(gameObject);
 
         InitializeAllSystems();
+        SetGameState(GameState.Playing);
     }
 
     private void InitializeAllSystems()

@@ -60,4 +60,23 @@ public class SpawnManager : MonoBehaviour
     }
  
     public int GetSpawnPointCount() => _spawnPoints.Length;
+
+    // Assets/Scripts/Managers/SpawnManager.cs में यह method add करो
+
+public GameObject SpawnPlayer()
+{
+    GameObject playerPrefab = Resources.Load<GameObject>("Prefabs/Player/Player");
+    if (playerPrefab == null)
+    {
+        Debug.LogError("[SpawnManager] Player prefab not found!");
+        return null;
+    }
+
+    Vector3 spawnPos = GetSpawnPosition();
+    GameObject player = Instantiate(playerPrefab, spawnPos, Quaternion.identity);
+    player.name = "Player";
+
+    Debug.Log($"[SpawnManager] Player spawned at {spawnPos}");
+    return player;
+}
 }
