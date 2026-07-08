@@ -148,6 +148,7 @@ public class InputManager : MonoBehaviour
         // Fire (Left Mouse / Gamepad RT)
         if (Input.GetMouseButton(0) || Input.GetButton("Fire1"))
         {
+            Debug.Log("Fire Input Detected");
             OnFireInput?.Invoke();
         }
 

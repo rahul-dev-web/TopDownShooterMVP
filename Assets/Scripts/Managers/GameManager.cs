@@ -75,6 +75,10 @@ public class GameManager : MonoBehaviour
 
         InitializeAllSystems();
         SetGameState(GameState.Playing);
+        // OnEnable में या Awake में:
+        PoolManager poolManager = GameManager.Instance.GetPoolManager();
+        GameObject bulletPrefab = Resources.Load<GameObject>("Prefabs/Weapons/Bullet");
+        poolManager.CreatePool("bullet", bulletPrefab, 100);  // 100 bullets pool
     }
 
     private void InitializeAllSystems()
