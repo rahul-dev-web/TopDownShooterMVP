@@ -13,9 +13,10 @@ GameObject:
   - component: {fileID: 1893656448003768065}
   - component: {fileID: 7525400307049598101}
   - component: {fileID: 1791216916610795046}
+  - component: {fileID: 427849079977133362}
   m_Layer: 0
   m_Name: Bullet
-  m_TagString: Untagged
+  m_TagString: Bullet
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -176,3 +177,18 @@ MonoBehaviour:
   bulletSize: 0.2
   penetrating: 0
   bulletColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
+--- !u!114 &427849079977133362
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4527069290358795609}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 18a26dc341b51a94eb0176b1016927b6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DamageDealer
+  damageAmount: 10
+  onCollisionOnly: 0
+  destroyAfterHit: 1
