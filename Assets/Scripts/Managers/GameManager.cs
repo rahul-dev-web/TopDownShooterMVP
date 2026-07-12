@@ -61,6 +61,10 @@ public class GameManager : MonoBehaviour
     // Debugging
     [SerializeField] private bool debugMode = true;
 
+    // Player Stats
+    private int _playerKills = 0;
+    private int _playerDeaths = 0;
+
     private void Awake()
     {
         // Singleton logic
@@ -74,13 +78,28 @@ public class GameManager : MonoBehaviour
         DontDestroyOnLoad(gameObject);
 
         InitializeAllSystems();
-        SetGameState(GameState.Playing);
+        SetGameState(GameState.Menu);
         // OnEnable में या Awake में:
         PoolManager poolManager = GameManager.Instance.GetPoolManager();
         GameObject bulletPrefab = Resources.Load<GameObject>("Prefabs/Weapons/Bullet");
         poolManager.CreatePool("bullet", bulletPrefab, 100);  // 100 bullets pool
     }
 
+    private void OnEnable()
+    {
+        Health.OnDeath += HandlePlayerDeath;
+        EnemyHealth.OnEnemyKilled += HandleEnemyKilled;
+
+        Debug.Log("[GameManager] Combat events subscribed");
+    }
+
+    private void OnDisable()
+    {
+        Health.OnDeath -= HandlePlayerDeath;
+        EnemyHealth.OnEnemyKilled -= HandleEnemyKilled;
+
+        Debug.Log("[GameManager] Combat events unsubscribed");
+    }
     private void InitializeAllSystems()
     {
         Debug.Log("[GameManager] Initializing all systems...");
@@ -111,7 +130,7 @@ public class GameManager : MonoBehaviour
     /// </summary>
     private T GetOrCreateManager<T>(string managerName) where T : MonoBehaviour
     {
-        T manager = FindObjectOfType<T>();
+        T manager = FindAnyObjectByType<T>();
 
         if (manager == null)
         {
@@ -249,4 +268,37 @@ public class GameManager : MonoBehaviour
         Debug.Log($"Frame Count: {Time.frameCount}");
         Debug.Log($"FPS: {1f / Time.deltaTime}");
     }
+
+    private void HandlePlayerDeath()
+    {
+        _playerDeaths++;
+        Debug.Log($"[GameManager] Player died. Total Deaths: {_playerDeaths}");
+    }
+
+    private void HandleEnemyKilled(int reward)
+    {
+        _playerKills++;
+        Debug.Log($"[GameManager] Enemy killed! Reward: {reward}");
+        Debug.Log($"[GameManager] Total Kills: {_playerKills}");
+    }
+
+    public int GetPlayerKills()
+{
+    return _playerKills;
+}
+
+    public int GetPlayerDeaths()
+{
+    return _playerDeaths;
+}
+
+    public void ResetStats()
+{
+    _playerKills = 0;
+    _playerDeaths = 0;
+
+    Time.timeScale = 1f; // Reset time scale in case it was paused
+
+    Debug.Log("[GameManager] Stats Reset");
+}
 }

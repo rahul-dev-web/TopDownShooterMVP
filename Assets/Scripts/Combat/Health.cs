@@ -56,6 +56,8 @@ public class Health : MonoBehaviour
         if (currentHealth < 0)
             currentHealth = 0;
 
+            GameManager.Instance?.GetAudioManager()?.PlaySFX("hit");
+
         // Send events
         OnHealthChanged?.Invoke(currentHealth, maxHealth);
         OnDamageTaken?.Invoke(damageSource, damageAmount);
@@ -94,6 +96,9 @@ public class Health : MonoBehaviour
             return;
 
         _isAlive = false;
+
+        // Play Death Sound
+        GameManager.Instance?.GetAudioManager()?.PlaySFX("death");
         Debug.Log($"[Health] {objectName} has died!");
 
         // Send death event

@@ -42,7 +42,16 @@ public class EnemyAI : MonoBehaviour
     private void Start()
     {
         // Find player
-        _targetPlayer = FindObjectOfType<PlayerController>();
+        _targetPlayer = FindAnyObjectByType<PlayerController>();
+
+
+    // Null check
+    if (_targetPlayer == null)
+    {
+        Debug.LogError("[EnemyAI] Player not found! Disabling AI");
+        enabled = false;
+        return;
+    }
     }
 
     private void FixedUpdate()
@@ -92,6 +101,7 @@ public class EnemyAI : MonoBehaviour
         if (playerHealth != null)
         {
             playerHealth.TakeDamage(attackDamage, transform.position);
+            GameManager.Instance?.GetAudioManager()?.PlaySFX("enemy_attack");
             _lastAttackTime = Time.time;
 
             Debug.Log($"[EnemyAI] Attacked player! -{attackDamage} HP");

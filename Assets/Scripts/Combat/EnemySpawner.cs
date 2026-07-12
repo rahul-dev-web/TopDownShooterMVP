@@ -54,9 +54,12 @@ public class EnemySpawner : MonoBehaviour
     private void SpawnEnemy()
     {
         // Get player position
-        PlayerController player = FindObjectOfType<PlayerController>();
+        PlayerController player = FindAnyObjectByType<PlayerController>();
         if (player == null)
-            return;
+{
+    Debug.LogWarning("[EnemySpawner] Player not found, cannot spawn");
+    return;
+}
 
         Vector3 playerPos = player.GetWorldPosition();
 

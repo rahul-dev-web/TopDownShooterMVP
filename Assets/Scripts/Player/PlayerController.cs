@@ -257,15 +257,30 @@ public class PlayerController : MonoBehaviour
     }
 
     public void SetAlive(bool alive)
-    {
-        _isAlive = alive;
-        if (!alive)
-        {
-            _rb.linearVelocity = Vector2.zero;
-            animator?.SetBool("IsDead", true);
-        }
-    }
+{
+    _isAlive = alive;
 
+    if (!alive)
+    {
+        // Stop player movement
+        _rb.linearVelocity = Vector2.zero;
+
+        // Disable weapon system
+        WeaponManager wm = GetComponent<WeaponManager>();
+        if (wm != null)
+        {
+            wm.enabled = false;
+        }
+
+        // Play death animation
+        if (animator != null)
+        {
+            animator.SetBool("IsDead", true);
+        }
+
+        Debug.Log("[PlayerController] Player died");
+    }
+}
     // ============== UTILITIES ==============
 
     /// <summary>
