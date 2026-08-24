@@ -1,9 +1,10 @@
-using UnityEngine;
 using TMPro;
+using UnityEngine;
 
 /// <summary>
-/// Phase 5 result screen controller.
-/// Shows the local MVP match summary. Later the same API can receive server-authoritative results.
+/// Displays the local MVP match result.
+/// Reads from KillCounter so combat stats have a single source of truth.
+/// The same UI can later consume authoritative server results.
 /// </summary>
 public class ResultScreen : MonoBehaviour
 {
@@ -11,22 +12,28 @@ public class ResultScreen : MonoBehaviour
     [SerializeField] private TMP_Text killsText;
     [SerializeField] private TMP_Text deathsText;
     [SerializeField] private TMP_Text summaryText;
+    [SerializeField] private TMP_Text scoreText;
 
-    private void OnEnable()
+    private KillCounter _killCounter;
+    private MatchManager _matchManager;
+
+    private void Awake()
     {
-        Refresh();
+        _killCounter = FindFirstObjectByType<KillCounter>();
+        _matchManager = FindFirstObjectByType<MatchManager>();
     }
+
+    private void OnEnable() => Refresh();
 
     public void Refresh()
     {
-        if (GameManager.Instance == null)
-            return;
-
-        int kills = GameManager.Instance.GetPlayerKills();
-        int deaths = GameManager.Instance.GetPlayerDeaths();
+        int kills = _killCounter != null ? _killCounter.GetTotalKills() : 0;
+        int deaths = _killCounter != null ? _killCounter.GetTotalDeaths() : 0;
+        int score = _matchManager != null ? _matchManager.GetCurrentScore() : kills;
+        int target = _matchManager != null ? _matchManager.GetTargetScore() : 0;
 
         if (titleText != null)
-            titleText.text = "MATCH RESULT";
+            titleText.text = target > 0 && score >= target ? "VICTORY" : "MATCH RESULT";
 
         if (killsText != null)
             killsText.text = $"Kills: {kills}";
@@ -34,18 +41,25 @@ public class ResultScreen : MonoBehaviour
         if (deathsText != null)
             deathsText.text = $"Deaths: {deaths}";
 
+        if (scoreText != null)
+            scoreText.text = target > 0 ? $"Score: {score} / {target}" : $"Score: {score}";
+
         if (summaryText != null)
-            summaryText.text = kills >= deaths ? "Good match!" : "Keep improving!";
+        {
+            float kd = deaths == 0 ? kills : (float)kills / deaths;
+            summaryText.text = kd >= 1f ? "Good match!" : "Keep improving!";
+        }
     }
 
     public void RestartMatch()
     {
-        GameManager.Instance.ResetStats();
+        Time.timeScale = 1f;
         GameManager.Instance.RestartGame();
     }
 
     public void ReturnToMenu()
     {
+        Time.timeScale = 1f;
         GameManager.Instance.ResetStats();
         GameManager.Instance.SetGameState(GameManager.GameState.Menu);
     }
