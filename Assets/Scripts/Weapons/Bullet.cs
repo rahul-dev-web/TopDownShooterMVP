@@ -1,72 +1,141 @@
-/// <summary>
-/// Bullet - Individual bullet object
-/// 
-/// Spawn होता है जब gun fire करे
-/// Physics से move करता है
-/// Collision पर damage deal करता है
-/// Pool से reuse होता है
-/// 
-/// Usage:
-/// Automatically spawned by Gun
-/// </summary>
-
-using UnityEngine;
 using System;
+using UnityEngine;
 
+/// <summary>
+/// Projectile that produces structured combat damage.
+/// Pool-safe: runtime state is reset on enable/disable and the projectile can be reused.
+/// </summary>
 [RequireComponent(typeof(Rigidbody2D))]
 [RequireComponent(typeof(CircleCollider2D))]
 public class Bullet : MonoBehaviour
 {
-    // ============== SERIALIZED FIELDS ==============
-
-    [SerializeField] private float speed = 20f;
-    [SerializeField] private float damage = 10f;
-    [SerializeField] private float lifetime = 5f;
-    [SerializeField] private float bulletSize = 0.2f;
-    [SerializeField] private bool penetrating = false;
+    [SerializeField, Min(0.1f)] private float speed = 20f;
+    [SerializeField, Min(0f)] private float damage = 10f;
+    [SerializeField, Min(0.01f)] private float lifetime = 5f;
+    [SerializeField, Min(0.01f)] private float bulletSize = 0.2f;
+    [SerializeField] private bool penetrating;
+    [SerializeField] private int maxPenetrations = 1;
     [SerializeField] private Color bulletColor = Color.yellow;
-
-    // ============== PRIVATE FIELDS ==============
+    [SerializeField, Min(0f)] private float knockbackForce;
 
     private Rigidbody2D _rb;
     private CircleCollider2D _collider;
     private SpriteRenderer _spriteRenderer;
     private Vector2 _direction = Vector2.right;
     private float _spawnTime;
-    private bool _hasHit = false;
+    private int _hitCount;
+    private bool _despawning;
+    private GameObject _owner;
 
-    // Events
+    // Legacy event retained for existing VFX/UI listeners.
     public static event Action<Vector3, float, Bullet> OnBulletHit;
+    // New structured event for future hit effects/network replication.
+    public static event Action<DamageInfo, DamageResult, Bullet> OnDamageResolved;
 
     private void Awake()
     {
-        // Components को cache करो
         _rb = GetComponent<Rigidbody2D>();
         _collider = GetComponent<CircleCollider2D>();
         _spriteRenderer = GetComponent<SpriteRenderer>();
 
-        // Create SpriteRenderer if doesn't exist
         if (_spriteRenderer == null)
-        {
             _spriteRenderer = gameObject.AddComponent<SpriteRenderer>();
-        }
 
-        // Setup default circle sprite
-        SetupBulletVisuals();
-
-        Debug.Log("[Bullet] Awake complete");
+        SetupVisuals();
+        _rb.constraints = RigidbodyConstraints2D.FreezeRotation;
     }
 
-    private void SetupBulletVisuals()
+    private void OnEnable()
     {
-        // Default white circle sprite
+        _spawnTime = Time.time;
+        _hitCount = 0;
+        _despawning = false;
+
+        if (_collider != null) _collider.enabled = true;
+        if (_spriteRenderer != null) _spriteRenderer.enabled = true;
+        ApplyVelocity();
+    }
+
+    private void OnDisable()
+    {
+        if (_rb != null) _rb.linearVelocity = Vector2.zero;
+        if (_collider != null) _collider.enabled = false;
+        if (_spriteRenderer != null) _spriteRenderer.enabled = false;
+        _owner = null;
+    }
+
+    private void Update()
+    {
+        if (Time.time - _spawnTime >= lifetime)
+        {
+            Despawn();
+            return;
+        }
+
+        if (_rb != null && _rb.linearVelocity.sqrMagnitude > 0.001f)
+        {
+            float angle = Mathf.Atan2(_rb.linearVelocity.y, _rb.linearVelocity.x) * Mathf.Rad2Deg;
+            transform.rotation = Quaternion.AngleAxis(angle, Vector3.forward);
+        }
+    }
+
+    private void OnTriggerEnter2D(Collider2D other)
+    {
+        if (_despawning || other == null)
+            return;
+
+        // Ignore own hierarchy and other projectiles.
+        if (_owner != null && other.transform.IsChildOf(_owner.transform))
+            return;
+        if (other.CompareTag("Bullet"))
+            return;
+
+        Vector2 hitPoint = other.ClosestPoint(transform.position);
+        Vector2 hitDirection = _direction.sqrMagnitude > 0f ? _direction.normalized : Vector2.zero;
+
+        DamageInfo info = new DamageInfo(
+            damage,
+            DamageType.Bullet,
+            _owner,
+            hitPoint,
+            hitDirection,
+            knockbackForce);
+
+        bool resolvedDamage = false;
+        DamageResult result = default;
+
+        MonoBehaviour[] behaviours = other.GetComponentsInParent<MonoBehaviour>();
+        foreach (MonoBehaviour behaviour in behaviours)
+        {
+            if (behaviour is IDamageable damageable)
+            {
+                if (!damageable.IsAlive)
+                    continue;
+
+                resolvedDamage = damageable.ApplyDamage(info);
+                if (behaviour is Health health)
+                    result = new DamageResult(resolvedDamage, !health.IsAlive, resolvedDamage ? info.Amount : 0f, health.CurrentHealth);
+                break;
+            }
+        }
+
+        OnBulletHit?.Invoke(hitPoint, damage, this);
+        if (resolvedDamage)
+            OnDamageResolved?.Invoke(info, result, this);
+
+        Debug.Log($"[Bullet] Hit '{other.gameObject.name}' damageResolved={resolvedDamage}");
+
+        _hitCount++;
+        if (!penetrating || _hitCount >= Mathf.Max(1, maxPenetrations))
+            Despawn();
+    }
+
+    private void SetupVisuals()
+    {
         _spriteRenderer.color = bulletColor;
         _spriteRenderer.sortingOrder = 50;
-
-        // Scale for size
         transform.localScale = Vector3.one * bulletSize;
 
-        // Collider setup
         if (_collider != null)
         {
             _collider.radius = 0.1f;
@@ -74,145 +143,56 @@ public class Bullet : MonoBehaviour
         }
     }
 
-    private void OnEnable()
+    private void ApplyVelocity()
     {
-        _spawnTime = Time.time;
-        _hasHit = false;
-
-        // Enable components
-        if (_rb != null) _rb.isKinematic = false;
-        if (_collider != null) _collider.enabled = true;
-        if (_spriteRenderer != null) _spriteRenderer.enabled = true;
-
-        Debug.Log("[Bullet] Enabled");
-    }
-
-    private void OnDisable()
-    {
-        // Disable physics
-        if (_rb != null) _rb.linearVelocity = Vector2.zero;
-        if (_collider != null) _collider.enabled = false;
-        if (_spriteRenderer != null) _spriteRenderer.enabled = false;
-    }
-
-    private void Start()
-    {
-        // Set initial velocity
         if (_rb != null)
-        {
             _rb.linearVelocity = _direction.normalized * speed;
-            _rb.constraints = RigidbodyConstraints2D.FreezeRotation;
-        }
     }
 
-    private void Update()
-    {   Debug.Log($"Bullet Pos = {transform.position}");
-        // Check lifetime and destroy if exceeded
-        if (Time.time - _spawnTime > lifetime)
-        {
-            DestroyBullet();
-            return;
-        }
-
-        // Rotate bullet towards movement direction
-        if (_rb != null && _rb.linearVelocity.magnitude > 0)
-        {
-            float angle = Mathf.Atan2(_rb.linearVelocity.y, _rb.linearVelocity.x) * Mathf.Rad2Deg;
-            transform.rotation = Quaternion.AngleAxis(angle, Vector3.forward);
-        }
-    }
-
-    private void OnTriggerEnter2D(Collider2D collision)
+    private void Despawn()
     {
-        // Already hit और penetrating नहीं है
-        if (_hasHit && !penetrating)
+        if (_despawning)
             return;
 
-        // Player को hit मत करो (खुद को नहीं)
-        if (collision.CompareTag("Player"))
-            return;
+        _despawning = true;
 
-        // Bullet से ignore करो
-        if (collision.CompareTag("Bullet"))
-            return;
-
-        // Hit event भेजो
-        OnBulletHit?.Invoke(transform.position, damage, this);
-        
-        Debug.Log($"[Bullet] Hit '{collision.gameObject.name}' at {transform.position}");
-
-        // अगर penetrating नहीं है तो destroy करो
-        if (!penetrating)
+        PoolManager poolManager = GameManager.Instance?.GetPoolManager();
+        if (poolManager != null && poolManager.PoolExists("bullet"))
         {
-            _hasHit = true;
-            DestroyBullet();
-        }
-    }
-
-    private void DestroyBullet()
-    {
-        // Pool manager से return करो
-        if (GameManager.Instance != null)
-        {
-            PoolManager poolManager = GameManager.Instance.GetPoolManager();
-            if (poolManager != null && poolManager.PoolExists("bullet"))
-            {
-                poolManager.ReturnPooledObject("bullet", gameObject);
-                return;
-            }
+            poolManager.ReturnPooledObject("bullet", gameObject);
+            return;
         }
 
-        // अगर pool नहीं है तो directly destroy करो
         Destroy(gameObject);
     }
 
-    // ============== PUBLIC INITIALIZATION ==============
-
-    public void Initialize(Vector2 bulletDirection, float bulletSpeed, float bulletDamage, 
-                          float bulletLifetime, bool isPenetrating, Color color, float size)
+    public void Initialize(Vector2 bulletDirection, float bulletSpeed, float bulletDamage,
+        float bulletLifetime, bool isPenetrating, Color color, float size)
     {
-        _direction = bulletDirection;
-        speed = bulletSpeed;
-        damage = bulletDamage;
-        lifetime = bulletLifetime;
-        penetrating = isPenetrating;
-        bulletColor = color;
-        bulletSize = size;
-
-        // Apply visuals
-        if (_spriteRenderer != null)
-        {
-            _spriteRenderer.color = bulletColor;
-        }
-
-        transform.localScale = Vector3.one * bulletSize;
-        if (_rb != null)
-{
-    _rb.linearVelocity = _direction.normalized * speed;
-    Debug.Log($"Velocity = {_rb.linearVelocity}");
-}
-        Debug.Log($"Spawn Position = {transform.position}");
-        Debug.Log($"[Bullet] Initialized - Speed: {speed}, Damage: {damage}");
+        Initialize(bulletDirection, bulletSpeed, bulletDamage, bulletLifetime,
+            isPenetrating, color, size, null);
     }
 
-    // ============== PUBLIC GETTERS ==============
+    public void Initialize(Vector2 bulletDirection, float bulletSpeed, float bulletDamage,
+        float bulletLifetime, bool isPenetrating, Color color, float size, GameObject owner)
+    {
+        _direction = bulletDirection.sqrMagnitude > 0f ? bulletDirection.normalized : Vector2.right;
+        speed = Mathf.Max(0.1f, bulletSpeed);
+        damage = Mathf.Max(0f, bulletDamage);
+        lifetime = Mathf.Max(0.01f, bulletLifetime);
+        penetrating = isPenetrating;
+        bulletColor = color;
+        bulletSize = Mathf.Max(0.01f, size);
+        _owner = owner;
+
+        SetupVisuals();
+        ApplyVelocity();
+    }
 
     public float GetDamage() => damage;
     public Vector2 GetDirection() => _direction;
     public Vector3 GetPosition() => transform.position;
-    public bool HasHit() => _hasHit;
-    public float GetLifetimeRemaining() => lifetime - (Time.time - _spawnTime);
-
-    // ============== DEBUG ==============
-
-    public void PrintDebugInfo()
-    {
-        Debug.Log("=== BULLET DEBUG ===");
-        Debug.Log($"Position: {transform.position}");
-        Debug.Log($"Direction: {_direction}");
-        Debug.Log($"Velocity: {_rb.linearVelocity}");
-        Debug.Log($"Damage: {damage}");
-        Debug.Log($"Lifetime Remaining: {GetLifetimeRemaining()}");
-        Debug.Log($"Has Hit: {_hasHit}");
-    }
+    public bool HasHit() => _hitCount > 0;
+    public float GetLifetimeRemaining() => Mathf.Max(0f, lifetime - (Time.time - _spawnTime));
+    public GameObject GetOwner() => _owner;
 }
