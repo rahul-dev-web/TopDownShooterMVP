@@ -1,68 +1,76 @@
 /// <summary>
-/// KillCounter - Tracks player kills और stats
-/// 
-/// Kills tracked करता है
-/// Deaths tracked करता है
-/// Statistics maintain करता है
+/// KillCounter - Tracks local MVP kills, deaths and streaks.
+/// Match score integration is isolated here so the combat event source can later be replaced by network-authoritative events.
 /// </summary>
-
-using UnityEngine;
 using System;
+using UnityEngine;
 
 public class KillCounter : MonoBehaviour
 {
-    // ============== PRIVATE FIELDS ==============
+    private int _totalKills;
+    private int _totalDeaths;
+    private int _currentKillStreak;
+    private int _maxKillStreak;
+    private MatchManager _matchManager;
 
-    private int _totalKills = 0;
-    private int _totalDeaths = 0;
-    private int _currentKillStreak = 0;
-    private int _maxKillStreak = 0;
+    public static event Action<int> OnKillScored;
+    public static event Action<int> OnDeathOccurred;
+    public static event Action<int> OnKillStreakChanged;
 
-    // Events
-    public static event Action<int> OnKillScored;      // (kill count)
-    public static event Action<int> OnDeathOccurred;   // (death count)
-    public static event Action<int> OnKillStreakChanged; // (streak count)
+    private void Awake()
+    {
+        _matchManager = FindFirstObjectByType<MatchManager>();
+    }
 
     private void OnEnable()
     {
         EnemyHealth.OnEnemyKilled += HandleEnemyKilled;
         Health.OnDeath += HandlePlayerDeath;
-
-        Debug.Log("[KillCounter] Subscribed to events");
+        MatchManager.OnMatchStateChanged += HandleMatchStateChanged;
     }
 
     private void OnDisable()
     {
         EnemyHealth.OnEnemyKilled -= HandleEnemyKilled;
         Health.OnDeath -= HandlePlayerDeath;
+        MatchManager.OnMatchStateChanged -= HandleMatchStateChanged;
     }
 
     private void HandleEnemyKilled(int reward)
     {
         _totalKills++;
         _currentKillStreak++;
+        _maxKillStreak = Mathf.Max(_maxKillStreak, _currentKillStreak);
 
-        if (_currentKillStreak > _maxKillStreak)
-            _maxKillStreak = _currentKillStreak;
+        if (_matchManager != null)
+            _matchManager.AddScore(1);
 
         OnKillScored?.Invoke(_totalKills);
         OnKillStreakChanged?.Invoke(_currentKillStreak);
-
-        Debug.Log($"[KillCounter] Kill #{_totalKills}! Streak: {_currentKillStreak}");
     }
 
     private void HandlePlayerDeath()
     {
         _totalDeaths++;
         _currentKillStreak = 0;
-
         OnDeathOccurred?.Invoke(_totalDeaths);
         OnKillStreakChanged?.Invoke(_currentKillStreak);
-
-        Debug.Log($"[KillCounter] Death #{_totalDeaths}!");
     }
 
-    // ============== GETTERS ==============
+    private void HandleMatchStateChanged(MatchManager.MatchState state)
+    {
+        if (state != MatchManager.MatchState.Waiting)
+            return;
+
+        _totalKills = 0;
+        _totalDeaths = 0;
+        _currentKillStreak = 0;
+        _maxKillStreak = 0;
+
+        OnKillScored?.Invoke(_totalKills);
+        OnDeathOccurred?.Invoke(_totalDeaths);
+        OnKillStreakChanged?.Invoke(_currentKillStreak);
+    }
 
     public int GetTotalKills() => _totalKills;
     public int GetTotalDeaths() => _totalDeaths;
@@ -72,17 +80,7 @@ public class KillCounter : MonoBehaviour
     public float GetKDRatio()
     {
         if (_totalDeaths == 0)
-            return _totalKills > 0 ? _totalKills : 0;
+            return _totalKills > 0 ? _totalKills : 0f;
         return (float)_totalKills / _totalDeaths;
-    }
-
-    public void PrintStats()
-    {
-        Debug.Log("=== KILL COUNTER STATS ===");
-        Debug.Log($"Total Kills: {_totalKills}");
-        Debug.Log($"Total Deaths: {_totalDeaths}");
-        Debug.Log($"Current Streak: {_currentKillStreak}");
-        Debug.Log($"Max Streak: {_maxKillStreak}");
-        Debug.Log($"K/D Ratio: {GetKDRatio():F2}");
     }
 }
