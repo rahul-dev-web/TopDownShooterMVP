@@ -193,6 +193,7 @@ public class Gun : MonoBehaviour
 
     public void SetOwner(GameObject owner) => _owner = owner;
     public GameObject GetOwner() => _owner;
+    public WeaponData GetWeaponData() => weaponData;
     public int GetAmmoInClip() => _ammoInClip;
     public int GetReserveAmmo() => _currentAmmo;
     public bool IsReloading() => _isReloading;
