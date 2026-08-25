@@ -4,7 +4,7 @@ using UnityEngine;
 
 /// <summary>
 /// Generic health component implementing the shared combat contract.
-/// Legacy TakeDamage(float, Vector3) is preserved while callers migrate to DamageInfo.
+/// Keeps legacy damage events/methods while exposing the structured combat pipeline.
 /// </summary>
 public class Health : MonoBehaviour, IDamageable
 {
@@ -14,27 +14,17 @@ public class Health : MonoBehaviour, IDamageable
     [SerializeField] private bool isPlayer;
     [SerializeField] private string objectName = "Object";
     [SerializeField, Min(0f)] private float invulnerabilityDuration = 0.2f;
+    [SerializeField, Min(0.01f)] private float damageFlashDuration = 0.15f;
 
-<<<<<<< Updated upstream
     private bool _isAlive = true;
     private float _lastDamageTime = float.NegativeInfinity;
-=======
-   // ============== PRIVATE FIELDS ==============
-
-// Common duration for damage flash and invulnerability
-private const float DAMAGE_FLASH_DURATION = 0.15f;
-
-private bool _isAlive = true;
-private float _lastDamageTime;
-private float _invulnerabilityDuration = DAMAGE_FLASH_DURATION;
->>>>>>> Stashed changes
 
     // Legacy events retained for existing UI and gameplay consumers.
     public static event Action<float, float> OnHealthChanged;
     public static event Action<Vector3, float> OnDamageTaken;
     public static event Action OnDeath;
 
-    // New structured events for the refactored combat pipeline.
+    // Structured events for the refactored combat pipeline.
     public event Action<DamageInfo, DamageResult> DamageApplied;
     public event Action<Health> Died;
 
@@ -44,12 +34,14 @@ private float _invulnerabilityDuration = DAMAGE_FLASH_DURATION;
 
     private void Awake()
     {
+        maxHealth = Mathf.Max(1f, maxHealth);
         currentHealth = maxHealth;
         _isAlive = true;
+        _lastDamageTime = float.NegativeInfinity;
         Debug.Log($"[Health] {objectName} initialized: {currentHealth}/{maxHealth}");
     }
 
-    /// <summary>New structured damage entry point.</summary>
+    /// <summary>Structured damage entry point.</summary>
     public bool ApplyDamage(DamageInfo damageInfo)
     {
         return ApplyDamageWithResult(damageInfo).Applied;
@@ -75,11 +67,7 @@ private float _invulnerabilityDuration = DAMAGE_FLASH_DURATION;
         OnDamageTaken?.Invoke(damageInfo.HitPoint, applied);
         DamageApplied?.Invoke(damageInfo, result);
 
-<<<<<<< Updated upstream
         Debug.Log($"[Health] {objectName} took {applied} {damageInfo.Type} damage. {currentHealth}/{maxHealth}");
-=======
-        Debug.Log($"[Health] {objectName} took {damageAmount} damage.{currentHealth}/{maxHealth}");
->>>>>>> Stashed changes
 
         if (result.Killed)
             Die();
@@ -89,8 +77,7 @@ private float _invulnerabilityDuration = DAMAGE_FLASH_DURATION;
         return result;
     }
 
-<<<<<<< Updated upstream
-    // Backward-compatible adapter for existing callers/scenes.
+    // Backward-compatible adapters for existing callers/scenes.
     public void TakeDamage(float damageAmount, Vector3 damageSource)
     {
         ApplyDamage(new DamageInfo(damageAmount, DamageType.Bullet, null, damageSource));
@@ -109,31 +96,11 @@ private float _invulnerabilityDuration = DAMAGE_FLASH_DURATION;
 
         Color originalColor = sprite.color;
         sprite.color = Color.red;
-        yield return new WaitForSeconds(0.1f);
+        yield return new WaitForSeconds(damageFlashDuration);
 
         if (sprite != null)
             sprite.color = originalColor;
     }
-=======
-    private System.Collections.IEnumerator DamageFlashCoroutine()
-{
-    SpriteRenderer sprite = GetComponent<SpriteRenderer>();
-
-    // Safety check
-    if (sprite == null)
-        yield break;
-
-    Color originalColor = sprite.color;
-
-    sprite.color = Color.red;
-
-    yield return new WaitForSeconds(DAMAGE_FLASH_DURATION);
-
-    // Safety check
-    if (sprite != null)
-        sprite.color = originalColor;
-}
->>>>>>> Stashed changes
 
     public void Die()
     {
@@ -159,15 +126,16 @@ private float _invulnerabilityDuration = DAMAGE_FLASH_DURATION;
         if (!_isAlive || healAmount <= 0f)
             return;
 
+        float before = currentHealth;
         currentHealth = Mathf.Min(maxHealth, currentHealth + healAmount);
-        OnHealthChanged?.Invoke(currentHealth, maxHealth);
+        if (!Mathf.Approximately(before, currentHealth))
+            OnHealthChanged?.Invoke(currentHealth, maxHealth);
     }
 
     public void SetHealth(float newHealth)
     {
         currentHealth = Mathf.Clamp(newHealth, 0f, maxHealth);
-        if (currentHealth > 0f)
-            _isAlive = true;
+        _isAlive = currentHealth > 0f;
         OnHealthChanged?.Invoke(currentHealth, maxHealth);
     }
 

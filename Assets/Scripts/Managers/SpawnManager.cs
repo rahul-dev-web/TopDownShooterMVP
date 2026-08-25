@@ -3,11 +3,12 @@ using UnityEngine;
 
 /// <summary>
 /// Manages explicitly registered scene spawn points.
-/// Avoids treating every Transform in the scene as a spawn location.
+/// Falls back to objects tagged "SpawnPoint" when no points are assigned in the Inspector.
 /// </summary>
 public class SpawnManager : MonoBehaviour
 {
     [SerializeField] private Transform[] spawnPoints;
+
     private readonly List<Transform> _registeredSpawnPoints = new List<Transform>();
     private int _nextSpawnIndex;
 
@@ -18,32 +19,32 @@ public class SpawnManager : MonoBehaviour
 
     private void Initialize()
     {
-<<<<<<< Updated upstream
         _registeredSpawnPoints.Clear();
+
+        // Preferred path: explicit Inspector references.
         if (spawnPoints != null)
         {
             foreach (Transform point in spawnPoints)
                 RegisterSpawnPointInternal(point);
         }
 
+        // Backward-compatible scene discovery when no explicit points are configured.
         if (_registeredSpawnPoints.Count == 0)
         {
-            GameObject[] taggedPoints = GameObject.FindGameObjectsWithTag("SpawnPoint");
-            foreach (GameObject point in taggedPoints)
-                RegisterSpawnPointInternal(point.transform);
+            try
+            {
+                GameObject[] taggedPoints = GameObject.FindGameObjectsWithTag("SpawnPoint");
+                foreach (GameObject point in taggedPoints)
+                    RegisterSpawnPointInternal(point != null ? point.transform : null);
+            }
+            catch (UnityException)
+            {
+                Debug.LogWarning("[SpawnManager] Tag 'SpawnPoint' is not defined. Configure spawn points in the Inspector.");
+            }
         }
 
         _nextSpawnIndex = 0;
         Debug.Log($"[SpawnManager] Ready with {_registeredSpawnPoints.Count} spawn points.");
-=======
-        Debug.Log("[SpawnManager] Initializing...");
- 
-        // Scene में सभी spawn points find करो
-        // Tag "SpawnPoint" वाली सभी objects को find करो
-        _spawnPoints = FindObjectsByType<Transform>();
- 
-        Debug.Log($"[SpawnManager] ✓ Found {_spawnPoints.Length} spawn points");
->>>>>>> Stashed changes
     }
 
     public Vector3 GetSpawnPosition()
@@ -72,7 +73,9 @@ public class SpawnManager : MonoBehaviour
 
     private void RegisterSpawnPointInternal(Transform spawnPoint)
     {
-        if (spawnPoint == null || _registeredSpawnPoints.Contains(spawnPoint)) return;
+        if (spawnPoint == null || _registeredSpawnPoints.Contains(spawnPoint))
+            return;
+
         _registeredSpawnPoints.Add(spawnPoint);
     }
 
