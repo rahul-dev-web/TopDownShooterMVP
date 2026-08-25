@@ -21,7 +21,7 @@ public class GameOverScreen : MonoBehaviour
 
     private void Start()
     {
-        _screenManager = FindObjectOfType<ScreenManager>();
+        _screenManager = FindAnyObjectByType<ScreenManager>();
 
         restartButton.onClick.AddListener(OnRestartClicked);
         menuButton.onClick.AddListener(OnMenuClicked);

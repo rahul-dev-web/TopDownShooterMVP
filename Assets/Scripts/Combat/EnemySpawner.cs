@@ -38,6 +38,8 @@ public class EnemySpawner : MonoBehaviour
 
     private void Update()
     {
+        if (GameManager.Instance.CurrentGameState != GameManager.GameState.Playing)
+            return;
         // Check if we can spawn
         if (_currentEnemyCount < maxEnemies && 
             Time.time - _lastSpawnTime > spawnInterval)

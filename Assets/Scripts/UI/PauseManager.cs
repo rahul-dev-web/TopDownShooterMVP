@@ -37,7 +37,7 @@ public class PauseManager : MonoBehaviour
         Time.timeScale = 0f;
         GameManager.Instance.SetGameState(GameManager.GameState.Paused);
         
-        ScreenManager screenManager = FindObjectOfType<ScreenManager>();
+        ScreenManager screenManager = FindAnyObjectByType<ScreenManager>();
         if (screenManager != null)
         {
             screenManager.ShowScreen(ScreenManager.ScreenType.Pause);
@@ -52,7 +52,7 @@ public class PauseManager : MonoBehaviour
         Time.timeScale = 1f;
         GameManager.Instance.SetGameState(GameManager.GameState.Playing);
 
-        ScreenManager screenManager = FindObjectOfType<ScreenManager>();
+        ScreenManager screenManager = FindAnyObjectByType<ScreenManager>();
         if (screenManager != null)
         {
             screenManager.ShowScreen(ScreenManager.ScreenType.Gameplay);

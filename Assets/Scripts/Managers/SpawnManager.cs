@@ -18,6 +18,7 @@ public class SpawnManager : MonoBehaviour
 
     private void Initialize()
     {
+<<<<<<< Updated upstream
         _registeredSpawnPoints.Clear();
         if (spawnPoints != null)
         {
@@ -34,6 +35,15 @@ public class SpawnManager : MonoBehaviour
 
         _nextSpawnIndex = 0;
         Debug.Log($"[SpawnManager] Ready with {_registeredSpawnPoints.Count} spawn points.");
+=======
+        Debug.Log("[SpawnManager] Initializing...");
+ 
+        // Scene में सभी spawn points find करो
+        // Tag "SpawnPoint" वाली सभी objects को find करो
+        _spawnPoints = FindObjectsByType<Transform>();
+ 
+        Debug.Log($"[SpawnManager] ✓ Found {_spawnPoints.Length} spawn points");
+>>>>>>> Stashed changes
     }
 
     public Vector3 GetSpawnPosition()

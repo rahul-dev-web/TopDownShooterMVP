@@ -15,8 +15,19 @@ public class Health : MonoBehaviour, IDamageable
     [SerializeField] private string objectName = "Object";
     [SerializeField, Min(0f)] private float invulnerabilityDuration = 0.2f;
 
+<<<<<<< Updated upstream
     private bool _isAlive = true;
     private float _lastDamageTime = float.NegativeInfinity;
+=======
+   // ============== PRIVATE FIELDS ==============
+
+// Common duration for damage flash and invulnerability
+private const float DAMAGE_FLASH_DURATION = 0.15f;
+
+private bool _isAlive = true;
+private float _lastDamageTime;
+private float _invulnerabilityDuration = DAMAGE_FLASH_DURATION;
+>>>>>>> Stashed changes
 
     // Legacy events retained for existing UI and gameplay consumers.
     public static event Action<float, float> OnHealthChanged;
@@ -64,7 +75,11 @@ public class Health : MonoBehaviour, IDamageable
         OnDamageTaken?.Invoke(damageInfo.HitPoint, applied);
         DamageApplied?.Invoke(damageInfo, result);
 
+<<<<<<< Updated upstream
         Debug.Log($"[Health] {objectName} took {applied} {damageInfo.Type} damage. {currentHealth}/{maxHealth}");
+=======
+        Debug.Log($"[Health] {objectName} took {damageAmount} damage.{currentHealth}/{maxHealth}");
+>>>>>>> Stashed changes
 
         if (result.Killed)
             Die();
@@ -74,6 +89,7 @@ public class Health : MonoBehaviour, IDamageable
         return result;
     }
 
+<<<<<<< Updated upstream
     // Backward-compatible adapter for existing callers/scenes.
     public void TakeDamage(float damageAmount, Vector3 damageSource)
     {
@@ -98,6 +114,26 @@ public class Health : MonoBehaviour, IDamageable
         if (sprite != null)
             sprite.color = originalColor;
     }
+=======
+    private System.Collections.IEnumerator DamageFlashCoroutine()
+{
+    SpriteRenderer sprite = GetComponent<SpriteRenderer>();
+
+    // Safety check
+    if (sprite == null)
+        yield break;
+
+    Color originalColor = sprite.color;
+
+    sprite.color = Color.red;
+
+    yield return new WaitForSeconds(DAMAGE_FLASH_DURATION);
+
+    // Safety check
+    if (sprite != null)
+        sprite.color = originalColor;
+}
+>>>>>>> Stashed changes
 
     public void Die()
     {

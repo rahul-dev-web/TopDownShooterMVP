@@ -26,7 +26,7 @@ public class UIManager : MonoBehaviour
         Debug.Log("[UIManager] Initializing...");
 
         // Canvas find करो या create करो
-        Canvas canvas = FindObjectOfType<Canvas>();
+        Canvas canvas = FindAnyObjectByType<Canvas>();
         if (canvas == null)
         {
             GameObject canvasObj = new GameObject("Canvas");

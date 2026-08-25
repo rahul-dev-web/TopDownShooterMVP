@@ -36,7 +36,7 @@ public class HealthDisplay : MonoBehaviour
                 healthBar.color = Color.Lerp(lowHealthColor, fullHealthColor, healthPercent); 
                 
                 // Update text 
-                healthText.text = $"Health: {currentHealth:F0}/{maxHealth:F0}"; 
+                healthText.text = $"{currentHealth:F0}/{maxHealth:F0}"; 
                 } 
                 private void OnDestroy() {
                      Health.OnHealthChanged -= UpdateDisplay; 

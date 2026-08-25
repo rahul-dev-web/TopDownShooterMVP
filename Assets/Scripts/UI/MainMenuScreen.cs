@@ -21,7 +21,7 @@ public class MainMenuScreen : MonoBehaviour
 
     private void Start()
     {
-        _screenManager = FindObjectOfType<ScreenManager>();
+        _screenManager = FindAnyObjectByType<ScreenManager>();
 
         playButton.onClick.AddListener(OnPlayClicked);
         settingsButton.onClick.AddListener(OnSettingsClicked);

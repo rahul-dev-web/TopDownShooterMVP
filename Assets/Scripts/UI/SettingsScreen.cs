@@ -25,7 +25,7 @@ public class SettingsScreen : MonoBehaviour
 
     private void Start()
     {
-        _screenManager = FindObjectOfType<ScreenManager>();
+        _screenManager = FindAnyObjectByType<ScreenManager>();
 
         masterVolumeSlider.onValueChanged.AddListener(OnMasterVolumeChanged);
         sfxVolumeSlider.onValueChanged.AddListener(OnSFXVolumeChanged);
