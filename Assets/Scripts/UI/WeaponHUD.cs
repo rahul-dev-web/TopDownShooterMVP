@@ -45,9 +45,10 @@ public class WeaponHUD : MonoBehaviour
             Gun currentGun = _weaponManager.GetCurrentGun();
             if (currentGun != null && currentGun.IsReloading())
             {
-               float progress = 1f - Mathf.Clamp01(
-    _reloadDuration / currentGun.GetWeaponData().GetReloadTime()
-);
+                float progress = 1f - Mathf.Clamp01(
+                    _reloadDuration / currentGun.GetWeaponData().GetReloadTime()
+                );
+                reloadBar.fillAmount = progress;
             }
         }
     }
@@ -66,7 +67,7 @@ public class WeaponHUD : MonoBehaviour
         if (weaponIcon != null)
             weaponIcon.sprite = data.GetWeaponSprite();
 
-        UpdateAmmoDisplay(currentGun.GetAmmoInClip(), currentGun.GetCurrentAmmo());
+        UpdateAmmoDisplay(currentGun.GetAmmoInClip(), currentGun.GetReserveAmmo());
     }
 
     private void UpdateAmmoDisplay(int clip, int total)
