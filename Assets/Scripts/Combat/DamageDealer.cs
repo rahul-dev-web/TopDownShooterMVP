@@ -35,7 +35,7 @@ public class DamageDealer : MonoBehaviour
 
         // Health component ढूंढो
         Health health = collision.GetComponent<Health>();
-        if (health != null && health.IsAlive())
+        if (health != null && health.IsAlive)
         {
             health.TakeDamage(damageAmount, transform.position);
             _hasDealtDamage = true;
