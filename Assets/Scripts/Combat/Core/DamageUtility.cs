@@ -1,8 +1,8 @@
 using UnityEngine;
 
 /// <summary>
-/// Shared helpers for combat producers. Keeps target lookup and damage construction
-/// consistent across bullets, explosions and future abilities.
+/// Shared helpers for combat producers. Keeps target lookup, team validation and
+/// damage application consistent across bullets, explosions and future abilities.
 /// </summary>
 public static class DamageUtility
 {
@@ -13,6 +13,9 @@ public static class DamageUtility
     {
         damageable = null;
         if (target == null)
+            return false;
+
+        if (!DamageRules.CanDamage(damageInfo.Source, target))
             return false;
 
         MonoBehaviour[] behaviours = target.GetComponentsInParent<MonoBehaviour>();
