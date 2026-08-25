@@ -24,15 +24,12 @@ public class Gun : MonoBehaviour
 
     private void Awake()
     {
-        if (weaponData == null)
-        {
-            Debug.LogError("[Gun] WeaponData not assigned.");
-            enabled = false;
-            return;
-        }
-
         _owner = ResolveOwner();
-        InitializeAmmo();
+
+        // WeaponManager can inject WeaponData immediately after instantiation.
+        // Do not disable the component when the prefab has no default data.
+        if (weaponData != null)
+            InitializeAmmo();
     }
 
     private void OnEnable()
@@ -55,14 +52,31 @@ public class Gun : MonoBehaviour
 
     private void InitializeAmmo()
     {
+        if (weaponData == null)
+            return;
+
         _currentAmmo = weaponData.GetStartingAmmo();
         _ammoInClip = weaponData.GetClipSize();
+        _isReloading = false;
         OnAmmoChanged?.Invoke(_ammoInClip, _currentAmmo);
+    }
+
+    public void SetWeaponData(WeaponData data)
+    {
+        if (data == null)
+        {
+            Debug.LogError("[Gun] Cannot assign null WeaponData.");
+            return;
+        }
+
+        weaponData = data;
+        _owner ??= ResolveOwner();
+        InitializeAmmo();
     }
 
     private void HandleFireInput()
     {
-        if (_isReloading)
+        if (weaponData == null || _isReloading)
             return;
 
         if (CanFire())
@@ -196,5 +210,28 @@ public class Gun : MonoBehaviour
     public WeaponData GetWeaponData() => weaponData;
     public int GetAmmoInClip() => _ammoInClip;
     public int GetReserveAmmo() => _currentAmmo;
+    public int GetCurrentAmmo() => _currentAmmo;
     public bool IsReloading() => _isReloading;
+    public int GetClipSize() => weaponData != null ? weaponData.GetClipSize() : 0;
+
+    public void AddAmmo(int amount)
+    {
+        if (amount <= 0)
+            return;
+
+        int maxAmmo = weaponData != null ? weaponData.GetMaxAmmo() : int.MaxValue;
+        _currentAmmo = Mathf.Clamp(_currentAmmo + amount, 0, maxAmmo);
+        OnAmmoChanged?.Invoke(_ammoInClip, _currentAmmo);
+    }
+
+    public void SetAmmo(int clipAmmo, int reserveAmmo)
+    {
+        if (weaponData == null)
+            return;
+
+        _ammoInClip = Mathf.Clamp(clipAmmo, 0, weaponData.GetClipSize());
+        _currentAmmo = Mathf.Clamp(reserveAmmo, 0, weaponData.GetMaxAmmo());
+        _isReloading = false;
+        OnAmmoChanged?.Invoke(_ammoInClip, _currentAmmo);
+    }
 }
