@@ -1,6 +1,6 @@
 /// <summary>
 /// KillCounter - Tracks local MVP kills, deaths and streaks.
-/// Match score integration is isolated here so the combat event source can later be replaced by network-authoritative events.
+/// Match score integration is handled by MatchManager through the authoritative kill attribution flow.
 /// </summary>
 using System;
 using UnityEngine;
@@ -11,16 +11,10 @@ public class KillCounter : MonoBehaviour
     private int _totalDeaths;
     private int _currentKillStreak;
     private int _maxKillStreak;
-    private MatchManager _matchManager;
 
     public static event Action<int> OnKillScored;
     public static event Action<int> OnDeathOccurred;
     public static event Action<int> OnKillStreakChanged;
-
-    private void Awake()
-    {
-        _matchManager = FindFirstObjectByType<MatchManager>();
-    }
 
     private void OnEnable()
     {
@@ -41,9 +35,6 @@ public class KillCounter : MonoBehaviour
         _totalKills++;
         _currentKillStreak++;
         _maxKillStreak = Mathf.Max(_maxKillStreak, _currentKillStreak);
-
-        if (_matchManager != null)
-            _matchManager.AddScore(1);
 
         OnKillScored?.Invoke(_totalKills);
         OnKillStreakChanged?.Invoke(_currentKillStreak);
