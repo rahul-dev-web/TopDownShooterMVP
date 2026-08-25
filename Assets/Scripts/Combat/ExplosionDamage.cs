@@ -4,7 +4,7 @@ using UnityEngine;
 
 /// <summary>
 /// Reusable radial damage producer for grenades and explosive weapons.
-/// Damage falls off linearly from the center to the configured radius.
+/// Team and friendly-fire validation is delegated to DamageRules via DamageUtility.
 /// </summary>
 public class ExplosionDamage : MonoBehaviour
 {
@@ -20,30 +20,22 @@ public class ExplosionDamage : MonoBehaviour
     {
         Vector2 center = transform.position;
         Collider2D[] hits = Physics2D.OverlapCircleAll(center, radius, damageableLayers);
-        HashSet<IDamageable> damagedTargets = new HashSet<IDamageable>();
+        HashSet<IDamageable> processedTargets = new HashSet<IDamageable>();
         int damagedCount = 0;
 
         foreach (Collider2D hit in hits)
         {
-            if (hit == null)
-                continue;
-
-            if (source != null && hit.transform.IsChildOf(source.transform))
+            if (hit == null || !DamageRules.CanDamage(source, hit))
                 continue;
 
             Vector2 closestPoint = hit.ClosestPoint(center);
             float distance = Vector2.Distance(center, closestPoint);
             float normalizedDistance = Mathf.Clamp01(distance / radius);
-            float finalDamage = damageFalloff
-                ? Mathf.Lerp(maxDamage, 0f, normalizedDistance)
-                : maxDamage;
-
-            if (finalDamage <= 0f)
-                continue;
+            float finalDamage = damageFalloff ? Mathf.Lerp(maxDamage, 0f, normalizedDistance) : maxDamage;
+            if (finalDamage <= 0f) continue;
 
             Vector2 direction = (closestPoint - center).normalized;
-            if (direction.sqrMagnitude <= 0.0001f)
-                direction = UnityEngine.Random.insideUnitCircle.normalized;
+            if (direction.sqrMagnitude <= 0.0001f) direction = UnityEngine.Random.insideUnitCircle.normalized;
 
             DamageInfo info = new DamageInfo(
                 finalDamage,
@@ -53,20 +45,15 @@ public class ExplosionDamage : MonoBehaviour
                 direction,
                 knockbackForce * (damageFalloff ? 1f - normalizedDistance : 1f));
 
-            MonoBehaviour[] behaviours = hit.GetComponentsInParent<MonoBehaviour>();
-            foreach (MonoBehaviour behaviour in behaviours)
-            {
-                if (behaviour is not IDamageable damageable || damagedTargets.Contains(damageable))
-                    continue;
+            bool applied = DamageUtility.TryApplyDamage(hit, info, out IDamageable damageable);
+            if (damageable == null || processedTargets.Contains(damageable))
+                continue;
 
-                damagedTargets.Add(damageable);
-                if (damageable.IsAlive && damageable.ApplyDamage(info))
-                {
-                    damagedCount++;
-                    OnExplosionDamageApplied?.Invoke(info, damageable);
-                }
-                break;
-            }
+            processedTargets.Add(damageable);
+            if (!applied) continue;
+
+            damagedCount++;
+            OnExplosionDamageApplied?.Invoke(info, damageable);
         }
 
         return damagedCount;
