@@ -1,93 +1,102 @@
-/// <summary>
-/// Health - Individual health component
-/// 
-/// किसी भी object के लिए health manage करता है
-/// Player, Enemies, etc. पर लगा सकते हो
-/// 
-/// Usage:
-/// Attach to any GameObject
-/// </summary>
-
-using UnityEngine;
 using System;
+using System.Collections;
+using UnityEngine;
 
-public class Health : MonoBehaviour
+/// <summary>
+/// Generic health component implementing the shared combat contract.
+/// Legacy TakeDamage(float, Vector3) is preserved while callers migrate to DamageInfo.
+/// </summary>
+public class Health : MonoBehaviour, IDamageable
 {
-    // ============== SERIALIZED FIELDS ==============
-
-    [SerializeField] private float maxHealth = 100f;
+    [Header("Health")]
+    [SerializeField, Min(1f)] private float maxHealth = 100f;
     [SerializeField] private float currentHealth;
-    [SerializeField] private bool isPlayer = false;
+    [SerializeField] private bool isPlayer;
     [SerializeField] private string objectName = "Object";
-
-    // ============== PRIVATE FIELDS ==============
+    [SerializeField, Min(0f)] private float invulnerabilityDuration = 0.2f;
 
     private bool _isAlive = true;
-    private float _lastDamageTime;
-    private float _invulnerabilityDuration = 0.2f;  // Damage flash duration
+    private float _lastDamageTime = float.NegativeInfinity;
 
-    // Events
-    public static event Action<float, float> OnHealthChanged;      // (current, max)
-    public static event Action<Vector3, float> OnDamageTaken;     // (position, damage)
+    // Legacy events retained for existing UI and gameplay consumers.
+    public static event Action<float, float> OnHealthChanged;
+    public static event Action<Vector3, float> OnDamageTaken;
     public static event Action OnDeath;
+
+    // New structured events for the refactored combat pipeline.
+    public event Action<DamageInfo, DamageResult> DamageApplied;
+    public event Action<Health> Died;
+
+    public bool IsAlive => _isAlive;
+    public float CurrentHealth => currentHealth;
+    public float MaxHealth => maxHealth;
 
     private void Awake()
     {
         currentHealth = maxHealth;
         _isAlive = true;
-        Debug.Log($"[Health] {objectName} health initialized: {currentHealth}/{maxHealth}");
+        Debug.Log($"[Health] {objectName} initialized: {currentHealth}/{maxHealth}");
     }
 
-    // ============== DAMAGE SYSTEM ==============
-
-    public void TakeDamage(float damageAmount, Vector3 damageSource)
+    /// <summary>New structured damage entry point.</summary>
+    public bool ApplyDamage(DamageInfo damageInfo)
     {
-        if (!_isAlive)
-            return;
+        return ApplyDamageWithResult(damageInfo).Applied;
+    }
 
-        // Invulnerability check
-        if (Time.time - _lastDamageTime < _invulnerabilityDuration)
-            return;
+    public DamageResult ApplyDamageWithResult(DamageInfo damageInfo)
+    {
+        if (!_isAlive || !damageInfo.IsValid)
+            return new DamageResult(false, false, 0f, currentHealth);
 
-        currentHealth -= damageAmount;
+        if (Time.time - _lastDamageTime < invulnerabilityDuration)
+            return new DamageResult(false, false, 0f, currentHealth);
+
+        float before = currentHealth;
+        currentHealth = Mathf.Max(0f, currentHealth - damageInfo.Amount);
+        float applied = before - currentHealth;
         _lastDamageTime = Time.time;
 
-        // Clamp health
-        if (currentHealth < 0)
-            currentHealth = 0;
+        GameManager.Instance?.GetAudioManager()?.PlaySFX("hit");
 
-            GameManager.Instance?.GetAudioManager()?.PlaySFX("hit");
-
-        // Send events
+        var result = new DamageResult(true, currentHealth <= 0f, applied, currentHealth);
         OnHealthChanged?.Invoke(currentHealth, maxHealth);
-        OnDamageTaken?.Invoke(damageSource, damageAmount);
+        OnDamageTaken?.Invoke(damageInfo.HitPoint, applied);
+        DamageApplied?.Invoke(damageInfo, result);
 
-        Debug.Log($"[Health] {objectName} took {damageAmount} damage. Health: {currentHealth}/{maxHealth}");
+        Debug.Log($"[Health] {objectName} took {applied} {damageInfo.Type} damage. {currentHealth}/{maxHealth}");
 
-        // Check death
-        if (currentHealth <= 0)
-        {
+        if (result.Killed)
             Die();
-        }
+        else
+            StartCoroutine(DamageFlashCoroutine());
 
-        // Damage flash effect
-        StartCoroutine(DamageFlashCoroutine());
+        return result;
     }
 
-    private System.Collections.IEnumerator DamageFlashCoroutine()
+    // Backward-compatible adapter for existing callers/scenes.
+    public void TakeDamage(float damageAmount, Vector3 damageSource)
+    {
+        ApplyDamage(new DamageInfo(damageAmount, DamageType.Bullet, null, damageSource));
+    }
+
+    public void TakeDamage(float damageAmount)
+    {
+        ApplyDamage(new DamageInfo(damageAmount));
+    }
+
+    private IEnumerator DamageFlashCoroutine()
     {
         SpriteRenderer sprite = GetComponent<SpriteRenderer>();
+        if (sprite == null)
+            yield break;
+
+        Color originalColor = sprite.color;
+        sprite.color = Color.red;
+        yield return new WaitForSeconds(0.1f);
+
         if (sprite != null)
-        {
-            Color originalColor = sprite.color;
-            sprite.color = Color.red;
-            yield return new WaitForSeconds(0.1f);
             sprite.color = originalColor;
-        }
-        else
-        {
-            yield return null;
-        }
     }
 
     public void Die()
@@ -96,65 +105,49 @@ public class Health : MonoBehaviour
             return;
 
         _isAlive = false;
-
-        // Play Death Sound
         GameManager.Instance?.GetAudioManager()?.PlaySFX("death");
-        Debug.Log($"[Health] {objectName} has died!");
 
-        // Send death event
         OnDeath?.Invoke();
+        Died?.Invoke(this);
+        Debug.Log($"[Health] {objectName} has died.");
 
-        // Disable gameplay
         if (isPlayer)
         {
             PlayerController player = GetComponent<PlayerController>();
-            if (player != null)
-            {
-                player.SetAlive(false);
-            }
+            player?.SetAlive(false);
         }
-
-        // TODO: Play death animation
-        // TODO: Play death sound
     }
 
     public void Heal(float healAmount)
     {
-        if (!_isAlive)
+        if (!_isAlive || healAmount <= 0f)
             return;
 
-        currentHealth += healAmount;
-        if (currentHealth > maxHealth)
-            currentHealth = maxHealth;
-
+        currentHealth = Mathf.Min(maxHealth, currentHealth + healAmount);
         OnHealthChanged?.Invoke(currentHealth, maxHealth);
-        Debug.Log($"[Health] {objectName} healed {healAmount}. Health: {currentHealth}/{maxHealth}");
     }
 
     public void SetHealth(float newHealth)
     {
-        currentHealth = Mathf.Clamp(newHealth, 0, maxHealth);
+        currentHealth = Mathf.Clamp(newHealth, 0f, maxHealth);
+        if (currentHealth > 0f)
+            _isAlive = true;
         OnHealthChanged?.Invoke(currentHealth, maxHealth);
     }
 
-    // ============== GETTERS ==============
-
     public float GetCurrentHealth() => currentHealth;
     public float GetMaxHealth() => maxHealth;
-    public float GetHealthPercent() => currentHealth / maxHealth;
-    public bool IsAlive() => _isAlive;
+    public float GetHealthPercent() => maxHealth <= 0f ? 0f : currentHealth / maxHealth;
     public bool IsDead() => !_isAlive;
 
     public void PrintDebugInfo()
     {
-        Debug.Log($"=== HEALTH DEBUG ({objectName}) ===");
-        Debug.Log($"Current: {currentHealth}/{maxHealth}");
-        Debug.Log($"Percent: {GetHealthPercent() * 100}%");
-        Debug.Log($"Is Alive: {_isAlive}");
+        Debug.Log($"=== HEALTH DEBUG ({objectName}) ===\nCurrent: {currentHealth}/{maxHealth}\nAlive: {_isAlive}");
     }
+
     [ContextMenu("Test Damage 25")]
-private void TestDamage()
-{
-    TakeDamage(25f, transform.position);
-}
+    private void TestDamage()
+    {
+        ApplyDamage(new DamageInfo(25f, DamageType.Bullet, null, transform.position));
+    }
 }

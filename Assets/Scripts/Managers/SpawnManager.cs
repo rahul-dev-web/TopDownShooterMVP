@@ -1,82 +1,84 @@
-/// <summary>
-/// SpawnManager - Player और Enemy Spawning
-/// Spawn points को manage करता है
-/// </summary>
+using System.Collections.Generic;
 using UnityEngine;
- 
+
+/// <summary>
+/// Manages explicitly registered scene spawn points.
+/// Avoids treating every Transform in the scene as a spawn location.
+/// </summary>
 public class SpawnManager : MonoBehaviour
 {
-    private Transform[] _spawnPoints;
-    private int _nextSpawnIndex = 0;
- 
-    private void OnEnable()
+    [SerializeField] private Transform[] spawnPoints;
+    private readonly List<Transform> _registeredSpawnPoints = new List<Transform>();
+    private int _nextSpawnIndex;
+
+    private void Awake()
     {
         Initialize();
     }
- 
+
     private void Initialize()
     {
-        Debug.Log("[SpawnManager] Initializing...");
- 
-        // Scene में सभी spawn points find करो
-        // Tag "SpawnPoint" वाली सभी objects को find करो
-        _spawnPoints = FindObjectsOfType<Transform>();
- 
-        Debug.Log($"[SpawnManager] ✓ Found {_spawnPoints.Length} spawn points");
+        _registeredSpawnPoints.Clear();
+        if (spawnPoints != null)
+        {
+            foreach (Transform point in spawnPoints)
+                RegisterSpawnPointInternal(point);
+        }
+
+        if (_registeredSpawnPoints.Count == 0)
+        {
+            GameObject[] taggedPoints = GameObject.FindGameObjectsWithTag("SpawnPoint");
+            foreach (GameObject point in taggedPoints)
+                RegisterSpawnPointInternal(point.transform);
+        }
+
+        _nextSpawnIndex = 0;
+        Debug.Log($"[SpawnManager] Ready with {_registeredSpawnPoints.Count} spawn points.");
     }
- 
+
     public Vector3 GetSpawnPosition()
     {
-        if (_spawnPoints.Length == 0)
-        {
-            Debug.LogError("[SpawnManager] No spawn points found!");
-            return Vector3.zero;
-        }
- 
-        Vector3 spawnPos = _spawnPoints[_nextSpawnIndex].position;
-        _nextSpawnIndex = (_nextSpawnIndex + 1) % _spawnPoints.Length;
- 
-        return spawnPos;
+        Transform point = GetSpawnPoint();
+        return point != null ? point.position : transform.position;
     }
- 
+
     public Transform GetSpawnPoint()
     {
-        if (_spawnPoints.Length == 0)
+        if (_registeredSpawnPoints.Count == 0)
         {
-            Debug.LogError("[SpawnManager] No spawn points found!");
+            Debug.LogError("[SpawnManager] No valid spawn points configured.");
             return null;
         }
- 
-        Transform spawnPoint = _spawnPoints[_nextSpawnIndex];
-        _nextSpawnIndex = (_nextSpawnIndex + 1) % _spawnPoints.Length;
- 
-        return spawnPoint;
+
+        Transform point = _registeredSpawnPoints[_nextSpawnIndex];
+        _nextSpawnIndex = (_nextSpawnIndex + 1) % _registeredSpawnPoints.Count;
+        return point;
     }
- 
+
     public void RegisterSpawnPoint(Transform spawnPoint)
     {
-        // Dynamic spawn point register करो
-        Debug.Log($"[SpawnManager] Registered spawn point: {spawnPoint.name}");
+        RegisterSpawnPointInternal(spawnPoint);
     }
- 
-    public int GetSpawnPointCount() => _spawnPoints.Length;
 
-    // Assets/Scripts/Managers/SpawnManager.cs में यह method add करो
-
-public GameObject SpawnPlayer()
-{
-    GameObject playerPrefab = Resources.Load<GameObject>("Prefabs/Player/Player");
-    if (playerPrefab == null)
+    private void RegisterSpawnPointInternal(Transform spawnPoint)
     {
-        Debug.LogError("[SpawnManager] Player prefab not found!");
-        return null;
+        if (spawnPoint == null || _registeredSpawnPoints.Contains(spawnPoint)) return;
+        _registeredSpawnPoints.Add(spawnPoint);
     }
 
-    Vector3 spawnPos = GetSpawnPosition();
-    GameObject player = Instantiate(playerPrefab, spawnPos, Quaternion.identity);
-    player.name = "Player";
+    public int GetSpawnPointCount() => _registeredSpawnPoints.Count;
 
-    Debug.Log($"[SpawnManager] Player spawned at {spawnPos}");
-    return player;
-}
+    public GameObject SpawnPlayer()
+    {
+        GameObject playerPrefab = Resources.Load<GameObject>("Prefabs/Player/Player");
+        if (playerPrefab == null)
+        {
+            Debug.LogError("[SpawnManager] Player prefab not found at Resources/Prefabs/Player/Player.");
+            return null;
+        }
+
+        GameObject player = Instantiate(playerPrefab, GetSpawnPosition(), Quaternion.identity);
+        player.name = "Player";
+        return player;
+    }
 }
