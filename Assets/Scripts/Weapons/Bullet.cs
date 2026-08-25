@@ -3,7 +3,7 @@ using UnityEngine;
 
 /// <summary>
 /// Projectile that produces structured combat damage.
-/// Pool-safe: runtime state is reset on enable/disable and the projectile can be reused.
+/// Pool-safe and validated through centralized DamageRules.
 /// </summary>
 [RequireComponent(typeof(Rigidbody2D))]
 [RequireComponent(typeof(CircleCollider2D))]
@@ -27,9 +27,7 @@ public class Bullet : MonoBehaviour
     private bool _despawning;
     private GameObject _owner;
 
-    // Legacy event retained for existing VFX/UI listeners.
     public static event Action<Vector3, float, Bullet> OnBulletHit;
-    // New structured event for future hit effects/network replication.
     public static event Action<DamageInfo, DamageResult, Bullet> OnDamageResolved;
 
     private void Awake()
@@ -37,10 +35,7 @@ public class Bullet : MonoBehaviour
         _rb = GetComponent<Rigidbody2D>();
         _collider = GetComponent<CircleCollider2D>();
         _spriteRenderer = GetComponent<SpriteRenderer>();
-
-        if (_spriteRenderer == null)
-            _spriteRenderer = gameObject.AddComponent<SpriteRenderer>();
-
+        if (_spriteRenderer == null) _spriteRenderer = gameObject.AddComponent<SpriteRenderer>();
         SetupVisuals();
         _rb.constraints = RigidbodyConstraints2D.FreezeRotation;
     }
@@ -50,7 +45,6 @@ public class Bullet : MonoBehaviour
         _spawnTime = Time.time;
         _hitCount = 0;
         _despawning = false;
-
         if (_collider != null) _collider.enabled = true;
         if (_spriteRenderer != null) _spriteRenderer.enabled = true;
         ApplyVelocity();
@@ -81,50 +75,26 @@ public class Bullet : MonoBehaviour
 
     private void OnTriggerEnter2D(Collider2D other)
     {
-        if (_despawning || other == null)
+        if (_despawning || other == null || other.CompareTag("Bullet"))
             return;
 
-        // Ignore own hierarchy and other projectiles.
-        if (_owner != null && other.transform.IsChildOf(_owner.transform))
-            return;
-        if (other.CompareTag("Bullet"))
+        // Friendly/self damage is ignored without consuming the projectile.
+        if (!DamageRules.CanDamage(_owner, other))
             return;
 
         Vector2 hitPoint = other.ClosestPoint(transform.position);
         Vector2 hitDirection = _direction.sqrMagnitude > 0f ? _direction.normalized : Vector2.zero;
+        DamageInfo info = new DamageInfo(damage, DamageType.Bullet, _owner, hitPoint, hitDirection, knockbackForce);
 
-        DamageInfo info = new DamageInfo(
-            damage,
-            DamageType.Bullet,
-            _owner,
-            hitPoint,
-            hitDirection,
-            knockbackForce);
-
-        bool resolvedDamage = false;
+        bool resolvedDamage = DamageUtility.TryApplyDamage(other, info, out IDamageable damageable);
         DamageResult result = default;
-
-        MonoBehaviour[] behaviours = other.GetComponentsInParent<MonoBehaviour>();
-        foreach (MonoBehaviour behaviour in behaviours)
-        {
-            if (behaviour is IDamageable damageable)
-            {
-                if (!damageable.IsAlive)
-                    continue;
-
-                resolvedDamage = damageable.ApplyDamage(info);
-                if (behaviour is Health health)
-                    result = new DamageResult(resolvedDamage, !health.IsAlive, resolvedDamage ? info.Amount : 0f, health.CurrentHealth);
-                break;
-            }
-        }
+        if (resolvedDamage && damageable is Health health)
+            result = new DamageResult(true, !health.IsAlive, info.Amount, health.CurrentHealth);
 
         OnBulletHit?.Invoke(hitPoint, damage, this);
-        if (resolvedDamage)
-            OnDamageResolved?.Invoke(info, result, this);
+        if (resolvedDamage) OnDamageResolved?.Invoke(info, result, this);
 
-        Debug.Log($"[Bullet] Hit '{other.gameObject.name}' damageResolved={resolvedDamage}");
-
+        // World geometry should still stop a non-penetrating projectile.
         _hitCount++;
         if (!penetrating || _hitCount >= Mathf.Max(1, maxPenetrations))
             Despawn();
@@ -135,7 +105,6 @@ public class Bullet : MonoBehaviour
         _spriteRenderer.color = bulletColor;
         _spriteRenderer.sortingOrder = 50;
         transform.localScale = Vector3.one * bulletSize;
-
         if (_collider != null)
         {
             _collider.radius = 0.1f;
@@ -145,32 +114,26 @@ public class Bullet : MonoBehaviour
 
     private void ApplyVelocity()
     {
-        if (_rb != null)
-            _rb.linearVelocity = _direction.normalized * speed;
+        if (_rb != null) _rb.linearVelocity = _direction.normalized * speed;
     }
 
     private void Despawn()
     {
-        if (_despawning)
-            return;
-
+        if (_despawning) return;
         _despawning = true;
-
         PoolManager poolManager = GameManager.Instance?.GetPoolManager();
         if (poolManager != null && poolManager.PoolExists("bullet"))
         {
             poolManager.ReturnPooledObject("bullet", gameObject);
             return;
         }
-
         Destroy(gameObject);
     }
 
     public void Initialize(Vector2 bulletDirection, float bulletSpeed, float bulletDamage,
         float bulletLifetime, bool isPenetrating, Color color, float size)
     {
-        Initialize(bulletDirection, bulletSpeed, bulletDamage, bulletLifetime,
-            isPenetrating, color, size, null);
+        Initialize(bulletDirection, bulletSpeed, bulletDamage, bulletLifetime, isPenetrating, color, size, null);
     }
 
     public void Initialize(Vector2 bulletDirection, float bulletSpeed, float bulletDamage,
@@ -184,7 +147,6 @@ public class Bullet : MonoBehaviour
         bulletColor = color;
         bulletSize = Mathf.Max(0.01f, size);
         _owner = owner;
-
         SetupVisuals();
         ApplyVelocity();
     }
