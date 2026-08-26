@@ -12,7 +12,7 @@ using UnityEngine.UI;
 
 /// <summary>
 /// Editor-only structural and visual setup auditor for the TopDownShooter MVP.
-/// Generic component discovery keeps this tool useful while gameplay scripts evolve.
+/// Uses widely supported Unity object-discovery APIs for maximum project compatibility.
 /// </summary>
 public static class TopDownShooterSceneAuditor
 {
@@ -42,7 +42,7 @@ public static class TopDownShooterSceneAuditor
         Section(report, "PHASE 0 - SCENE FOUNDATION");
         CheckRequired(scene.IsValid() && scene.isLoaded, "Active scene is loaded", missing, passes, "Open and save a valid gameplay scene.");
         CheckRequired(Camera.main != null, "Main Camera exists and is tagged MainCamera", missing, passes, "Select gameplay camera and set Tag = MainCamera.");
-        CheckRequired(FindFirstObjectByType<EventSystem>(FindObjectsInactive.Include) != null, "EventSystem exists", missing, passes, "Create GameObject > UI > Event System.");
+        CheckRequired(FindSceneComponent<EventSystem>(allObjects) != null, "EventSystem exists", missing, passes, "Create GameObject > UI > Event System.");
 
         Section(report, "PHASE 1 - CORE MANAGERS");
         CheckComponentByName(allComponents, new[] { "GameManager" }, "GameManager", missing, warnings, passes, true);
@@ -82,7 +82,7 @@ public static class TopDownShooterSceneAuditor
         report.AppendLine($"Spawn-like objects found: {spawnPoints}");
 
         Section(report, "PHASE 5 - UI");
-        Canvas[] canvases = FindObjectsByType<Canvas>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        Canvas[] canvases = allObjects.SelectMany(o => o.GetComponents<Canvas>()).Where(c => c != null).ToArray();
         CheckRequired(canvases.Length > 0, "Canvas exists", missing, passes, "Create GameObject > UI > Canvas.");
         CheckWarning(FindNamedObject(allObjects, "HUD") != null || HasComponentName(allComponents, "HUD"), "HUD object/component found", warnings, passes, "Create a HUD root under Canvas.");
         CheckWarning(FindNamedObject(allObjects, "Result") != null, "Result screen/panel found", warnings, passes, "Create a Result panel under Canvas.");
@@ -136,6 +136,16 @@ public static class TopDownShooterSceneAuditor
         string path = Path.Combine(Directory.GetParent(Application.dataPath).FullName, "SceneAuditReports", "latest-scene-audit.txt");
         if (!File.Exists(path)) { EditorUtility.DisplayDialog("Scene Auditor", "No audit report exists yet. Run Audit Active Scene first.", "OK"); return; }
         EditorUtility.RevealInFinder(path);
+    }
+
+    private static T FindSceneComponent<T>(GameObject[] objects) where T : Component
+    {
+        foreach (GameObject obj in objects)
+        {
+            T component = obj.GetComponent<T>();
+            if (component != null) return component;
+        }
+        return null;
     }
 
     private static void Section(StringBuilder report, string title) { report.AppendLine(); report.AppendLine(title); report.AppendLine(new string('-', 48)); }
